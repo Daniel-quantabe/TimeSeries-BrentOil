@@ -1,0 +1,91 @@
+---
+title: "Brent Oil Price Forecasting"  
+subtitle: "Coursework 1"  
+author: "Osaretin Daniel Agbonkpolor"  
+date: "Spring Term 2025"  
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: spacelab 
+    highlight: tango
+---
+
+```{r, echo=FALSE}
+# This code will display the QMUL logo at the top right of the page
+# Do not change this code
+htmltools::img(src = knitr::image_uri("images/QMlogo.png"),
+               alt = 'logo',
+               style = 'position:absolute; top:0; right:0; padding:10px; width:20%;')
+```
+
+```{r, echo=FALSE}
+# Hidden setup code: Load libraries (do NOT include install.packages() here!)
+library(ggplot2) # For plotting the data
+library(quantmod) # For getting Brent oil data through API
+library(prophet) # For Forecasting
+library(dplyr) # For filtering out 'N/A' in the data
+```
+
+# Introduction
+
+I chose Brent Oil for my analysis because of its relevance, being that it serves as a reference price for $\frac{2}{3}$ of the world's traded oil. I also lived in Bahrain for 7 years and had daily encounters with oil rigs and pipelines. The data set I'll be using spans from 1987 to today, which provides a large record to look at, including the 2008 crash and effects of COVID-19 in 2020. Using tools I've learnt over my degree, I will identify trends and seasonal patterns in Brent oil prices, measure the impact of major global events on the volatility of Brent oil's price, and use Prophet to do a 5-year forecast.
+
+## Getting The Data
+
+```{r}
+getSymbols("DCOILBRENTEU", src = "FRED") # This is to get Brent oil from the federal reserve bank website
+brent_oil <- DCOILBRENTEU # This names the Brent oil data from as 'Brent_oil'
+brent_oil_df <- data.frame(ds = index(brent_oil),y = as.numeric(brent_oil$DCOILBRENTEU)) %>% na.omit() #this creates a data frame from the xts file because it isn't accepted by prophet, i also  removed all the 'N/A' values.
+
+```
+
+# 1 Brent Oil Price Analysis
+
+## 1.1 Plotting the data
+
+```{r, echo=TRUE}
+# This creates a red line plot of Brent oil prices over time
+ggplot(brent_oil_df, aes(x = ds, y = y)) +
+  geom_line(color = "darkred") +
+  labs(title = "Brent Oil Prices (1987–2025)", x = "Date", y = "Price (USD)") +
+  theme_minimal()
+```
+
+Brent crude oil price has undergone extreme volatility as a result of significant global economic events. Prices spiked above \$140 a barrel due to surging global demand in the run-up to the 2008 financial crisis, then fell to \$40 as the recession cut demand. Between 2014 and 2016, the U.S. shale boom contributed to oversupply, while OPEC maintained production, pushing prices down to \$30 a barrel. When the travel industry crashed, the price dropped to \$15 in 2020. By the end of 2021, however, as demand rebounded and supply chains came under pressure, prices bounced back to about \$70.
+
+## 1.2 Prophet Configuration (Seasonality)
+
+```{r}
+# gives 'model' intraweek and intrayear seasonality
+model <- prophet(brent_oil_df, daily.seasonality = FALSE, weekly.seasonality = TRUE,yearly.seasonality = TRUE) 
+# This creates a future dataframe for forecasting 5 years (1825 days) ahead  
+five_years <- make_future_dataframe(model, periods = 1825, freq = "day")  
+
+# This generates a forecast using the fitted Prophet model  
+forecast <- predict(model, five_years)  
+print("figure 2")
+# This splits forecast into components: trend, weekly/yearly seasonality, and residuals  
+prophet_plot_components(model, forecast)  
+  
+```
+
+### **1.2.1 Impact on Weekly Seasonality**
+
+The apparent "increase" on weekends is likely because there is no data for those days or filling gaps with Friday’s price rather than the actual prices.
+
+### **1.2.2 Impact on Yearly Seasonality**
+
+Brent oil prices show clear annual seasonality, conveying consistent seasonal demand changes. Prices are usually highest in July–August, up about 2%; relative to the annual average. This is likely due to summer travelling, which leads to an increase in demand for oil. An increase in driving, flying, and air-conditioning use could lead to an increase in the price of oil. Meanwhile, prices fall 2–3% in January and February likely due to diminished consumption and slower industrial activity after the holiday.
+
+I'll talk about the trend in the next section.
+
+## 1.3 Prophet Configuration (Trend & Forecast)
+
+```{R}
+
+plot(model, forecast,xlab="Date", ylab="Price (USD)")
+
+```
+
+Although Prophet catches long term trends and seasonality of Brent oil prices, there are several important economic elements which it does not sufficiently take into account. It does not predict sudden swings in price like what we saw in 2020, where the price dropped to \$70/barrel to \$20/barrel in a matter of weeks, or the 2008 financial crisis collapse from \$140/barrel to \$40/barrel. This is because it assumes gradual change based on historical data. The model also smooths over long volatile cycles, such as the 2014–2016 oil glut, which should be categorised as clusters of persistent risk rather than as random noise.
